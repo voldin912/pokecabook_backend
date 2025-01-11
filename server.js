@@ -1,14 +1,20 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
+require('dotenv').config();
 const db = require('./db'); // Import database connection
 
 const app = express();
 const PORT = 5000;
 
 // Middleware
-app.use(cors());
-app.use(cors({ origin: 'http://localhost:3000' })); // Adjust the origin as needed
+// app.use(cors());
+
+app.use(cors({
+    origin: process.env.FRONTEND_URL,
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type'],
+})); // Adjust the origin as needed
 app.use(bodyParser.json()); // Parse JSON bodies
 
 // Routes
