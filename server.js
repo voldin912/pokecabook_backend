@@ -7,8 +7,7 @@ require('dotenv').config();
 const app = express();
 const PORT = 5000;
 
-// Load allowed origin from .env file
-const allowedOrigins = [process.env.FRONTEND_URL, "http://localhost:3000"];
+const allowedOrigins = [process.env.FRONTEND_URL, "http://162.43.45.35:80", "http://162.43.45.35"];
 
 app.use(
     cors({
@@ -27,9 +26,8 @@ app.use(
 app.use(bodyParser.json()); // Parse JSON bodies
 
 app.post("/api/cards", async (req, res) => {
+    console.log("⛳ API FROM FRONTEND IS ARRIVED! ⛳");
     try {
-        console.log("🎈 API FROM FRONTEND IS ARRIVED! 🎈");
-        // Extract startDate, endDate, and league from the request body
         const { startDate, endDate, league } = req.body;
 
         // Ensure the required parameters are provided
@@ -41,60 +39,54 @@ app.post("/api/cards", async (req, res) => {
 
         // Define the MySQL query
         const query = `
-            WITH GroupedCounts AS (
-    SELECT
-        category,
-        image,
-        NAME,
-        DATE_FORMAT(date_date, '%Y-%m-%d') AS date_date,
-        COUNT AS temp_count, 
-        COUNT(*) AS ROW_COUNT
-    FROM
-        cards_cards
-    WHERE league = ? AND date_date BETWEEN ? AND ?
-    GROUP BY
-        category, NAME, COUNT
-),
-Aggregated AS (
-    SELECT
-        category,
-        image,
-        date_date,        
-        NAME,
-        SUM(temp_count * ROW_COUNT) AS total_weighted_count,
-        SUM(ROW_COUNT) AS total_row_count
-    FROM
-        GroupedCounts
-    GROUP BY
-        category, NAME
-)
-SELECT
-    a.category,
-    a.name,
-    b.image,
-    GROUP_CONCAT(a.temp_count) AS row_counts, -- Aggregate row_count values
-    GROUP_CONCAT(ROUND(a.row_count / b.total_row_count * 100, 2)) AS percentages, -- Aggregate percentage values
-    b.total_row_count -- Include total_row_count in the output
-FROM
-    GroupedCounts a
-JOIN
-    Aggregated b
-ON
-    a.category = b.category AND a.name = b.name
-GROUP BY
-    a.category, a.name, b.image, b.total_row_count;
-
-`;
+            SELECT
+                category_var,
+                name_var,
+                count_int,
+                image_var,
+                GROUP_CONCAT(count_int
+                    ORDER BY count_int ASC) AS counts,
+                GROUP_CONCAT(card_count
+                    ORDER BY count_int ASC) AS card_counts,
+                GROUP_CONCAT(
+                    ROUND((card_count / cards_total) * 100, 2)
+                    ORDER BY count_int ASC
+                ) AS percentages
+            FROM
+            (SELECT
+                category_var,
+                name_var,
+                count_int,
+                image_var,
+                COUNT(*) AS card_count,
+                (SELECT
+                COUNT(*)
+                FROM
+                cards_cards d
+                WHERE d.name_var = c.name_var
+                and league_var = ?
+                and date_date between ?
+                and ?) AS cards_total
+            FROM
+                cards_cards c
+            where league_var = ?
+                and date_date between ?
+                AND ?
+            GROUP BY category_var,
+                name_var,
+                count_int) AS result
+            GROUP BY name_var;
+            `;
 
         // Execute the query with parameters
-        const rows = await db.query(query, [league, startDate, endDate]);
+        const rows = await db.query(query, [league, startDate, endDate, league, startDate, endDate]);
         // console.log("rows====>", rows);
         console.log("👌 THE ROW ARE RERTURN BACK ====> OK! 👌");
         // Respond with the filtered data
         res.status(200).json(rows);
     } catch (err) {
         console.error("Error fetching data:", err);
-        res.status(500).json({ message: "Database error" });
+        // res.status(500).json({ message: "Database error" });
     }
 });
 
@@ -126,5 +118,5 @@ app.put("/api/users/:id", async (req, res) => {
 
 // Start the server
 app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
+    console.log(`🐎🐎🐎 Server is running on http://localhost:${PORT} 🐎🐎🐎`);
 });
