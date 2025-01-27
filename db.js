@@ -5,7 +5,7 @@ const pool = mysql.createPool({
     host: '127.0.0.1',
     user: 'root',
     password: 'your_new_password',
-    database: 'pokemon_schema',
+    database: 'pokemon_final',
     waitForConnections: true,
     connectionLimit: 5, // Adjust based on traffic needs
     queueLimit: 3
