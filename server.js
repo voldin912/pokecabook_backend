@@ -150,7 +150,7 @@ app.post("/api/cards", async (req, res) => {
                 SELECT
                     category_int,
                     image_var,
-                    name_var,
+                    REPLACE(name_var, ' ', '') AS name_var,
                     count_int,
                     COUNT(*) AS count_frequency
                 FROM (
