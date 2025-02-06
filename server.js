@@ -28,7 +28,7 @@ app.post("/api/cards", async (req, res) => {
             return res.status(400).json({ message: "Missing required parameters" });
         }
 
-        const query_temp = `
+        const query = `
             WITH FilteredEvents AS (
                 SELECT id, event_holding_id
                 FROM events
@@ -108,7 +108,7 @@ app.post("/api/cards", async (req, res) => {
         // ,
         //         percentage_array
         // Execute the query with parameters
-        const [rows] = await db.query(query_temp, [startDate, endDate, league, category]);
+        const [rows] = await db.query(query, [startDate, endDate, league, category]);
         console.log("rows==>", rows);
         
         // const filtered_rows = rows[0]?.total_events_count || 0;
@@ -186,6 +186,20 @@ app.post("/api/cards", async (req, res) => {
     }
 });
 
+app.get("/api/card-category", async (req, res) => {
+    console.log("🍖 API FROM FRONTEND IS ARRIVED! 🍖");
+    try {
+        const query = `SELECT * FROM deck_categories1`;
+        const [deck_categories1] = await db.query(query);
+        console.log("deck_categories1===>", deck_categories1);
+        
+        // Send the actual data in the response
+        res.status(200).json(deck_categories1);
+    } catch (err) {
+        console.error("Error fetching data:", err);
+        res.status(500).json({ message: "Internal Server Error", error: err.message });
+    }
+});
 // Start the server
 app.listen(PORT, () => {
     console.log(`🐎🐎🐎 Server is running on http://localhost:${PORT} 🐎🐎🐎`);
