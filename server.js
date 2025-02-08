@@ -191,7 +191,7 @@ app.get("/api/card-category", async (req, res) => {
     try {
         const query = `SELECT * FROM deck_categories1`;
         const [deck_categories1] = await db.query(query);
-        console.log("deck_categories1===>", deck_categories1);
+        // console.log("deck_categories1===>", deck_categories1);
         
         // Send the actual data in the response
         res.status(200).json(deck_categories1);
@@ -200,6 +200,53 @@ app.get("/api/card-category", async (req, res) => {
         res.status(500).json({ message: "Internal Server Error", error: err.message });
     }
 });
+
+app.get("/api/day-card", async(req, res) => {
+    console.log("🍖 API FROM FRONTEND IS ARRIVED! 🍖");
+    try {
+        const query = `
+            SELECT 
+                q1.event_date_date, 
+                q1.event_title_var, 
+                q1.deck_ID_var, 
+                q2.event_count
+            FROM (
+                SELECT 
+                    events.event_date_date, 
+                    events.event_title_var, 
+                    decks.deck_ID_var
+                FROM events
+                INNER JOIN decks
+                    ON events.event_holding_id = decks.event_holding_id
+                GROUP BY events.event_date_date
+            ) AS q1
+            INNER JOIN (
+                SELECT 
+                    event_date_date, 
+                    COUNT(*) AS event_count
+                FROM events
+                GROUP BY event_date_date
+            ) AS q2
+            ON q1.event_date_date = q2.event_date_date
+            ORDER BY q1.event_date_date DESC;
+        `;
+        const [event_per_day_result] = await db.query(query);
+
+        console.log("event_per_day_result==>", event_per_day_result);
+        
+        // res.status(200).json(event_per_day_result);
+        // if (rows.length > 0) {
+        //     console.log("👌 DATA FOUND, RETURNING BACK TO FRONTEND 👌");
+        //     // console.log("rows====>", rows);
+        //     res.status(200).json({ rows, filtered_events_count, filtered_decks_count, filtered_specific_decks_count }); // Send the data to the frontend
+        // } else {
+        //     res.status(200).json({ rows, filtered_events_count, filtered_decks_count, filtered_specific_decks_count });
+        // }
+    } catch (err) {
+        console.error("Error fetching data:", err);
+        res.status(500).json({ message: "Internal Server Error", error: err.message });
+    }
+})
 // Start the server
 app.listen(PORT, () => {
     console.log(`🐎🐎🐎 Server is running on http://localhost:${PORT} 🐎🐎🐎`);
