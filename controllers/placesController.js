@@ -6,18 +6,18 @@ exports.getPlaces = async (req, res) => {
     const { page, pageSize } = req.body;
     const offset = (page - 1) * pageSize;
     const query = `
-      SELECT 
-                e.event_holding_id, 
-                e.event_date_date, 
-                e.event_title_var, 
-                e.event_place_var, 
-                d.deck_ID_var
-            FROM events AS e
-            LEFT JOIN decks AS d
-                ON e.event_holding_id = d.event_holding_id
-            GROUP BY e.event_place_var
-            ORDER BY e.id
-            LIMIT ${pageSize} OFFSET ${offset};
+        SELECT 
+            e.event_holding_id, 
+            e.event_date_date, 
+            e.event_title_var, 
+            e.event_place_var, 
+            d.deck_ID_var
+        FROM events AS e
+        LEFT JOIN decks AS d
+            ON e.event_holding_id = d.event_holding_id
+        GROUP BY e.event_place_var
+        ORDER BY e.id
+        LIMIT ${pageSize} OFFSET ${offset};
     `;
     const [events_result] = await db.query(query);
     res.status(200).json(events_result);
