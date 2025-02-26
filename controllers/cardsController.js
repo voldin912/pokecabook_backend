@@ -11,6 +11,72 @@ exports.getCards = async (req, res) => {
       return res.status(400).json({ message: "Missing required parameters" });
     }
 
+    const cd_query = `
+        SELECT conds from deck_categories1 WHERE category1_var = ?
+    `
+    const [conditions] = await db.query(cd_query,[category])
+    console.log("****conditions", conditions[0])
+    const conds = conditions[0].conds.length > 0 ? JSON.parse(conditions[0].conds) : "";
+    
+    // let where_cond = "";
+    // if(conds.length > 0) {
+    //     conds.forEach(item => {
+    //         switch(item.cardCondition) {
+    //             case "eql": 
+    //                 where_cond += `AND c.name_var = '${item.cardName}' AND c.count_int = ${item.cardNumber} `
+    //                 break;
+    //             case "gte":
+    //                 where_cond += `AND c.name_var = '${item.cardName}' AND c.count_int >= ${item.cardNumber} `
+    //                 break;
+    //             case "lte":
+    //                 where_cond += `AND c.name_var = '${item.cardName}' AND c.count_int <= ${item.cardNumber} `
+    //                 break;
+    //             case "ueq":
+    //                 where_cond += `AND c.name_var = '${item.cardName}' AND c.count_int != ${item.cardNumber} `
+    //                 break;
+    //             default:
+    //                 break;
+    //         }
+    //     })
+    // }
+
+    let having_cond = "";
+    if (conds.length > 0) {
+        conds.forEach(item => {
+            let operator;
+            switch(item.cardCondition) {
+            case "eql": 
+                operator = "=";
+                break;
+            case "gte":
+                operator = ">=";
+                break;
+            case "lte":
+                operator = "<=";
+                break;
+            case "ueq":
+                operator = "!=";
+                break;
+            default:
+                operator = "=";
+                break;
+            }
+            having_cond += ` AND (REPLACE(name_var, ' ', '') = '${item.cardName}' AND SUM(c.count_int) ${operator} ${item.cardNumber})`;
+        });
+    }
+
+    // FilteredCardsByCategory AS (
+    //     SELECT c.*
+    //     FROM cards c
+    //     WHERE EXISTS (
+    //         SELECT 1
+    //         FROM FilteredDecks fd
+    //         WHERE c.deck_ID_var = fd.deck_ID_var
+    //     )
+    //     ${where_cond}
+    // ),
+    // where_cond = where_cond == "" ? "true" : where_cond;
+    // console.log("****where_cond", where_cond)
     const query = `
         WITH FilteredEvents AS (
             SELECT id, event_holding_id
@@ -24,15 +90,21 @@ exports.getCards = async (req, res) => {
             JOIN FilteredEvents fe ON d.event_holding_id = fe.event_holding_id
         ),
         FilteredCardsByCategory AS (
-            SELECT c.*
+            SELECT 
+                c.deck_ID_var,
+                c.category_int,
+                c.image_var,
+                REPLACE(c.name_var, ' ', '') AS name_var,
+                SUM(c.count_int) AS total_count
             FROM cards c
             WHERE EXISTS (
                 SELECT 1
                 FROM FilteredDecks fd
                 WHERE c.deck_ID_var = fd.deck_ID_var
             )
-            AND c.name_var = ?
-            AND c.count_int > 1
+            GROUP BY c.deck_ID_var, c.category_int, c.image_var, REPLACE(c.name_var, ' ', '')
+            HAVING 1=1
+            ${having_cond}
         ),
         RelatedDecks AS (
             SELECT DISTINCT d.*, fc.image_var
@@ -87,8 +159,9 @@ exports.getCards = async (req, res) => {
             counts_array
         FROM FinalResults;
     `;
+    console.log(query)
 
-    const [rows] = await db.query(query, [startDate, endDate, league, category]);
+    const [rows] = await db.query(query, [startDate, endDate, league]);
     
     const events_count_query = `
                 SELECT COUNT(*) AS total_events_count
@@ -96,7 +169,7 @@ exports.getCards = async (req, res) => {
                 WHERE event_date_date BETWEEN ? AND ?;
             `;
     
-            const events_count = await db.query(events_count_query, [startDate, endDate]);
+            const events_count = await db.query(events_count_query, [startDate, endDate, league]);
             const filtered_events_count = events_count[0][0]?.total_events_count || 0;
             
             // console.log("😀😀😀😀filtered_events_count==>", filtered_events_count);
@@ -165,3 +238,14 @@ exports.getCardCategories = async (req, res) => {
     res.status(500).json({ message: "Internal Server Error", error: err.message });
   }
 };
+
+exports.getAll = async (req, res) => {
+    try {
+        const query = `SELECT * FROM cards`;
+        const [cards] = await db.query(query);
+        res.status(200).json(cards)
+    } catch (err) {
+        console.error("error cards:", err);
+        res.status(500).json({ message : "Internal Server error", error : err.message})
+    }
+}

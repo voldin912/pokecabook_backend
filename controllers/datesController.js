@@ -37,11 +37,17 @@ exports.getEventByDay = async (req, res) => {
   }
 };
 
-exports.getPlacesDetails = async (req, res) => {
+exports.getDatesDetails = async (req, res) => {
   try {
     const { id } = req.params;
-    const query = `SELECT d.event_holding_id, d.deck_ID_var, d.rank_int, d.point_int FROM decks as d WHERE event_holding_id = ${id} ORDER BY point_int DESC, id ASC`;
-    const [events_result] = await db.query(query);
+    console.log("req.params.id==>", id);
+
+    const query = `SELECT * FROM decks WHERE deck_date_date = ?;`;
+    
+    // Using a parameterized query to prevent SQL injection
+    const [events_result] = await db.query(query, [id]);
+
+    console.log("events_result==", events_result);
     res.status(200).json(events_result);
   } catch (err) {
     console.error("Error fetching data:", err);

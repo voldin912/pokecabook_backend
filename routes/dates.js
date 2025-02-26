@@ -1,8 +1,8 @@
 const express = require("express");
-const { getEventByDay, getPlacesDetails } = require("../controllers/datesController");
+const { getEventByDay, getDatesDetails } = require("../controllers/datesController");
 const router = express.Router();
 
 router.get("/day-card", getEventByDay);
-router.get("/place-card/:id", getPlacesDetails);
+router.get("/date-card/:id", getDatesDetails);
 
 module.exports = router;
