@@ -41,8 +41,11 @@ exports.getCards = async (req, res) => {
     // }
 
     let having_cond = "";
+    let select_cond = "";
+    let requiredPairsSQL = "";
+    let whereConditions = "";
     if (conds.length > 0) {
-        conds.forEach(item => {
+        conds.forEach((item,index) => {
             let operator;
             switch(item.cardCondition) {
             case "eql": 
@@ -61,10 +64,18 @@ exports.getCards = async (req, res) => {
                 operator = "=";
                 break;
             }
-            having_cond += ` AND (REPLACE(name_var, ' ', '') = '${item.cardName}' AND SUM(c.count_int) ${operator} ${item.cardNumber})`;
+            having_cond += ` AND count_val_${index+1} ${operator} ${item.cardNumber}`;
+            select_cond += `SUM(CASE WHEN name_var = '${item.cardName}' THEN c.count_int ELSE 0 END) AS count_val_${index+1}`;
+            // Append SQL for RequiredPairs table
+            requiredPairsSQL += `    SELECT '${item.cardName}' AS name_var, ${item.cardNumber} AS required_count, '${operator}' AS operator`;
+            whereConditions += `    (rp.operator = '${operator}' AND dcc.count_int ${operator} rp.required_count)`;
+            // Add UNION ALL for all but the last entry
+            if (index < conds.length - 1) {
+                requiredPairsSQL += " UNION ALL";
+                whereConditions += " OR";
+            }
         });
     }
-
     // FilteredCardsByCategory AS (
     //     SELECT c.*
     //     FROM cards c
@@ -89,77 +100,79 @@ exports.getCards = async (req, res) => {
             FROM decks d
             JOIN FilteredEvents fe ON d.event_holding_id = fe.event_holding_id
         ),
-        FilteredCardsByCategory AS (
+        RequiredPairs AS (
+            ${requiredPairsSQL}
+        ),
+        DeckCardCounts AS (
             SELECT 
                 c.deck_ID_var,
-                c.category_int,
-                c.image_var,
                 REPLACE(c.name_var, ' ', '') AS name_var,
-                SUM(c.count_int) AS total_count
+                c.count_int,
+                COUNT(*) AS pair_count
             FROM cards c
             WHERE EXISTS (
                 SELECT 1
                 FROM FilteredDecks fd
                 WHERE c.deck_ID_var = fd.deck_ID_var
             )
-            GROUP BY c.deck_ID_var, c.category_int, c.image_var, REPLACE(c.name_var, ' ', '')
-            HAVING 1=1
-            ${having_cond}
+            GROUP BY c.deck_ID_var, REPLACE(c.name_var, ' ', ''), c.count_int
+        ),
+        FilteredValidDecks AS (
+            SELECT dcc.deck_ID_var
+            FROM DeckCardCounts dcc
+            JOIN RequiredPairs rp ON REPLACE(dcc.name_var, ' ', '') = rp.name_var
+            WHERE 
+                ${whereConditions}
+            GROUP BY dcc.deck_ID_var
+            HAVING COUNT(DISTINCT dcc.name_var) >= (SELECT COUNT(*) FROM RequiredPairs)
         ),
         RelatedDecks AS (
-            SELECT DISTINCT d.*, fc.image_var
-            FROM decks d
-            JOIN FilteredCardsByCategory fc ON d.deck_ID_var = fc.deck_ID_var
+            SELECT DISTINCT deck_ID_var FROM FilteredValidDecks
         ),
         AllRelatedCards AS (
-            SELECT c.*
+            SELECT 
+                c.deck_ID_var,
+                c.category_int,
+                c.image_var,
+                REPLACE(c.name_var, ' ', '') AS name_var,
+                count_int
             FROM cards c
-            WHERE EXISTS (
-                SELECT 1
-                FROM RelatedDecks rd
-                WHERE c.deck_ID_var = rd.deck_ID_var
-            )
+            INNER JOIN RelatedDecks rd ON c.deck_ID_var = rd.deck_ID_var
         ),
         CardCounts AS (
-            SELECT
+            SELECT 
+                deck_ID_var,
                 category_int,
                 image_var,
                 REPLACE(name_var, ' ', '') AS name_var,
                 count_int,
-                COUNT(*) AS count_frequency
-            FROM (
-                SELECT name_var, count_int, image_var, category_int
-                FROM AllRelatedCards
-            ) AS subquery
-            GROUP BY name_var, count_int
+                COUNT(*) AS appearance_count,
+                SUM(count_int) AS total_count
+            FROM AllRelatedCards
+            GROUP BY deck_ID_var, category_int, REPLACE(name_var, ' ', ''), count_int  
+            ORDER BY deck_ID_var, appearance_count ASC
         ),
-        CardTotals AS (
-            SELECT
-                name_var,
-                SUM(count_frequency) AS total_count
+        PairAppearanceInDecks AS (
+            SELECT 
+                category_int,
+                image_var,
+                REPLACE(name_var, ' ', '') as name_var,
+                count_int,
+                COUNT(deck_ID_var) AS appearance_count
             FROM CardCounts
-            GROUP BY name_var
-        ),
-        FinalResults AS (
-            SELECT
-                cc.category_int,
-                cc.image_var,
-                cc.name_var,
-                GROUP_CONCAT(cc.count_int ORDER BY cc.count_int ASC) AS count_array,
-                GROUP_CONCAT(cc.count_frequency ORDER BY cc.count_int ASC) AS counts_array
-            FROM CardCounts cc
-            JOIN CardTotals ct ON cc.name_var = ct.name_var
-            GROUP BY cc.name_var
+            GROUP BY category_int, REPLACE(name_var, ' ', ''), count_int
+            ORDER BY category_int, count_int ASC
         )
         SELECT
             category_int,
             image_var,
-            name_var,
-            count_array AS COUNT,
-            counts_array
-        FROM FinalResults;
+            REPLACE(name_var, ' ', '') as name_var,
+            GROUP_CONCAT(count_int) AS COUNT,
+            GROUP_CONCAT(appearance_count) AS counts_array
+        FROM PairAppearanceInDecks
+        GROUP BY category_int, REPLACE(name_var, ' ', '')
+        ORDER BY REPLACE(name_var, ' ', '') ASC
     `;
-    console.log(query)
 
     const [rows] = await db.query(query, [startDate, endDate, league]);
     
@@ -181,6 +194,7 @@ exports.getCards = async (req, res) => {
             `
     
             const [decks_count] = await db.query(decks_count_query, [startDate, endDate]);
+            
             const filtered_decks_count = decks_count[0]?.total_decks_count || 0;
     
             // console.log("decks_count==>", filtered_decks_count);
@@ -197,26 +211,37 @@ exports.getCards = async (req, res) => {
                     FROM decks d
                     JOIN FilteredEvents fe ON d.event_holding_id = fe.event_holding_id
                 ),
-                FilteredCardsByCategory AS (
-                    SELECT c.*
+                RequiredPairs AS (
+                    ${requiredPairsSQL}
+                ),
+                DeckCardCounts AS (
+                    SELECT 
+                        c.deck_ID_var,
+                        REPLACE(c.name_var, ' ', '') AS name_var,
+                        c.count_int,
+                        COUNT(*) AS pair_count
                     FROM cards c
                     WHERE EXISTS (
                         SELECT 1
                         FROM FilteredDecks fd
                         WHERE c.deck_ID_var = fd.deck_ID_var
                     )
-                    AND c.name_var = ?
-                    AND c.count_int > 1
+                    GROUP BY c.deck_ID_var, REPLACE(c.name_var, ' ', ''), c.count_int
                 ),
-                RelatedDecks AS (
-                    SELECT DISTINCT d.event_holding_id, d.place_var, d.deck_ID_var
-                    FROM decks d
-                    JOIN FilteredCardsByCategory fc ON d.deck_ID_var = fc.deck_ID_var
+                FilteredValidDecks AS (
+                    SELECT dcc.deck_ID_var
+                    FROM DeckCardCounts dcc
+                    JOIN RequiredPairs rp ON REPLACE(dcc.name_var, ' ', '') = rp.name_var
+                    WHERE 
+                        ${whereConditions}
+                    GROUP BY dcc.deck_ID_var
+                    HAVING COUNT(DISTINCT dcc.name_var) >= (SELECT COUNT(*) FROM RequiredPairs)
                 )
-                SELECT COUNT(*) AS specific_count FROM RelatedDecks	
+                SELECT COUNT(*) AS specific_count FROM FilteredValidDecks	
             `;
     
             const [specific_decks_count] = await db.query(specific_decks_count_query, [startDate, endDate, league, category]);
+            console.log(specific_decks_count)
             const filtered_specific_decks_count = specific_decks_count[0]?.specific_count || 0;
             
             // console.log("specific_decks_count==>", filtered_specific_decks_count);
