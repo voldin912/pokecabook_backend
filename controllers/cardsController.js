@@ -1,7 +1,7 @@
 const db = require("../config/db");
 
 exports.getCards = async (req, res) => {
-  console.log("⛳ API FROM FRONTEND IS ARRIVED! ⛳");
+  console.log("⛳ API FROM FRONTEND IS ARRIVED!@@@@@@@@@@@@@@@@@ ⛳");
   try {
     console.log("req.body==>", req.body);
 
@@ -69,11 +69,13 @@ exports.getCards = async (req, res) => {
             // Append SQL for RequiredPairs table
             requiredPairsSQL += `    SELECT '${item.cardName}' AS name_var, ${item.cardNumber} AS required_count, '${operator}' AS operator`;
             whereConditions += `    (rp.operator = '${operator}' AND dcc.count_int ${operator} rp.required_count)`;
+
             // Add UNION ALL for all but the last entry
             if (index < conds.length - 1) {
                 requiredPairsSQL += " UNION ALL";
                 whereConditions += " OR";
             }
+            console.log("having_cond==>", having_cond,"select_cond==>", select_cond,"requiredPairsSQL==>", requiredPairsSQL, "whereConditions==>", whereConditions);
         });
     }
     // FilteredCardsByCategory AS (
@@ -134,8 +136,14 @@ exports.getCards = async (req, res) => {
                 c.deck_ID_var,
                 c.category_int,
                 c.image_var,
-                REPLACE(c.name_var, ' ', '') AS name_var,
-                count_int
+                CASE 
+                    WHEN TRIM(COALESCE(c.first_attack, '')) != '' THEN 
+                        REPLACE(CONCAT(c.name_var, '(', c.first_attack, ')'), ' ', '')
+                    ELSE 
+                        REPLACE(c.name_var, ' ', '')
+                END AS name_var,
+                count_int,
+                first_attack
             FROM cards c
             INNER JOIN RelatedDecks rd ON c.deck_ID_var = rd.deck_ID_var
         ),
@@ -144,12 +152,13 @@ exports.getCards = async (req, res) => {
                 deck_ID_var,
                 category_int,
                 image_var,
-                REPLACE(name_var, ' ', '') AS name_var,
+                REPLACE(name_var, ' ', '') as name_var,
                 count_int,
                 COUNT(*) AS appearance_count,
                 SUM(count_int) AS total_count
             FROM AllRelatedCards
-            GROUP BY deck_ID_var, category_int, REPLACE(name_var, ' ', ''), count_int  
+            GROUP BY deck_ID_var, category_int, 
+            REPLACE(name_var, ' ', ''), count_int  
             ORDER BY deck_ID_var, appearance_count ASC
         ),
         PairAppearanceInDecks AS (
@@ -167,14 +176,16 @@ exports.getCards = async (req, res) => {
             category_int,
             image_var,
             REPLACE(name_var, ' ', '') as name_var,
-            GROUP_CONCAT(count_int) AS COUNT,
-            GROUP_CONCAT(appearance_count) AS counts_array
+            GROUP_CONCAT(count_int ORDER BY count_int) AS COUNT,
+            GROUP_CONCAT(appearance_count ORDER BY count_int) AS counts_array,
+            MAX(appearance_count) as max_appearance
         FROM PairAppearanceInDecks
         GROUP BY category_int, REPLACE(name_var, ' ', '')
-        ORDER BY REPLACE(name_var, ' ', '') ASC
+        ORDER BY max_appearance DESC
     `;
 
     const [rows] = await db.query(query, [startDate, endDate, league]);
+    // console.log(query)
     
     const events_count_query = `
                 SELECT COUNT(*) AS total_events_count

@@ -9,7 +9,8 @@ const placeRoutes = require("./routes/places");
 const userRoutes = require("./routes/users");
 const authRoutes = require("./routes/auth");
 const categoryRoutes = require("./routes/category")
-
+const decksRoutes = require("./routes/decks");
+const cardDetailRoutes = require("./routes/cardDetail");
 const app = express();
 const PORT = 5000;
 
@@ -23,6 +24,8 @@ app.use("/api", placeRoutes);
 app.use("/api", userRoutes);
 app.use("/api", categoryRoutes);
 app.use("/api", authRoutes);
+app.use("/api", decksRoutes);
+app.use("/api", cardDetailRoutes);
 
 app.listen(PORT, () => {
   console.log(`🐎🐎🐎Server running on port ${PORT}🐎🐎🐎`);
