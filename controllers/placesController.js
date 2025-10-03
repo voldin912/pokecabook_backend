@@ -43,7 +43,7 @@ exports.getPlacesDetails = async (req, res) => {
   console.log("🏢🏢👨‍💼 API FROM FRONTEND IS ARRIVED! 🏢👨‍💼");
   try {
     const { id } = req.params;
-    const query = `SELECT d.event_holding_id, d.deck_ID_var, d.rank_int, d.point_int FROM decks as d WHERE event_holding_id = ${id} ORDER BY point_int DESC, id ASC`;
+    const query = `SELECT d.event_holding_id, d.deck_ID_var, d.rank_int, d.point_int FROM decks as d WHERE event_holding_id = ? ORDER BY point_int DESC, id ASC`;
     const [events_result] = await db.query(query);
     console.log('events_result==', events_result);
     res.status(200).json(events_result);
